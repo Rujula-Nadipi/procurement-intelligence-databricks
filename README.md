@@ -94,7 +94,8 @@ All data is public World Bank open data, filtered to Kenya (CC BY 4.0).
 | P90 "safe-to-commit" coverage | **87%** (target 90%) |
 | Supplier names merged by normalisation | 4,159 → 3,994 |
 | Report chunks embedded in Vector Search | 3,132 focused passages (from 76,047 chunks) |
-| Agent evaluation (9 questions incl. adversarial) | routing 1.00 · verifier 1.00 · safety 1.00 · relevance 0.89 |
+| Agent evaluation (9 questions incl. adversarial, run on the deployed `agent_core`) | routing 1.00 · strict out-of-scope refusal 1.00 · safety 1.00 · relevance 0.89 · verifier 0.89 (one answer flagged, see limitations) |
+| Daily Workflow | 7-task DAG, green end to end |
 
 ---
 
@@ -150,6 +151,7 @@ All data is public World Bank open data, filtered to Kenya (CC BY 4.0).
 ## Limitations and next steps
 
 - Evaluation set of 9 questions: grow it to ~50 with hand-labelled reference answers.
+- One evaluation answer is still flagged by the verifier (a number not traceable to a tool result); next step is to inspect it and tighten the prompt or the forecast output format.
 - Rule-based supplier normalisation: add fuzzy matching and a prefix list (e.g., "M/S").
 - P90 slightly optimistic (87%): add conformal calibration.
 - Log the supervisor as an MLflow model and serve it as its own endpoint (the App currently calls the agents directly).
