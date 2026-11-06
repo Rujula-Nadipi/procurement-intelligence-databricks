@@ -1,0 +1,11 @@
+# How Databricks starts the app, and its configuration
+command: ["streamlit", "run", "app.py"]
+env:
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse          # filled in from the SQL warehouse RESOURCE (added in Step 3)
+  - name: PROCINTEL_LLM
+    value: databricks-meta-llama-3-3-70b-instruct
+  - name: PROCINTEL_FORECAST_ENDPOINT
+    value: procintel-tender-forecast
+  - name: PROCINTEL_INDEX
+    value: procintel.ml.rag_focus_index

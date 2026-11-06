@@ -1,0 +1,723 @@
+{
+  "datasets": [
+    {
+      "name": "1895cb3e",
+      "displayName": "headline",
+      "queryLines": [
+        "-- Headline numbers for the top of the dashboard\r\n",
+        "SELECT COUNT(*)                                   AS contracts,\r\n",
+        "       ROUND(SUM(total_amount_usd) / 1e6, 1)      AS contracted_usd_millions,\r\n",
+        "       (SELECT median(tender_days) FROM procintel.gold.tender_training WHERE is_valid_label) AS median_tender_days\r\n",
+        "FROM procintel.silver.contracts;"
+      ]
+    },
+    {
+      "name": "b77184dd",
+      "displayName": "value_by_year",
+      "queryLines": [
+        "-- Contract value per year, split by category (works / goods / consulting / non-consulting)\r\n",
+        "SELECT year(signing_date)                    AS signing_year,\r\n",
+        "       procurement_group,\r\n",
+        "       ROUND(SUM(total_amount_usd) / 1e6, 2)  AS usd_millions\r\n",
+        "FROM procintel.silver.contracts\r\n",
+        "WHERE signing_date IS NOT NULL\r\n",
+        "GROUP BY ALL\r\n",
+        "ORDER BY signing_year;"
+      ]
+    },
+    {
+      "name": "d0fe479e",
+      "displayName": "tender_speed_by_method",
+      "queryLines": [
+        "-- How long does each procurement method take? (valid labels only)\r\n",
+        "SELECT procurement_method,\r\n",
+        "       COUNT(*)            AS tenders,\r\n",
+        "       median(tender_days) AS median_days\r\n",
+        "FROM procintel.gold.tender_training\r\n",
+        "WHERE is_valid_label\r\n",
+        "GROUP BY procurement_method\r\n",
+        "HAVING COUNT(*) >= 10          -- hide methods with too few examples to trust\r\n",
+        "ORDER BY median_days DESC;"
+      ]
+    },
+    {
+      "name": "90d303f7",
+      "displayName": "governance_trend",
+      "queryLines": [
+        "-- Kenya's governance scores over time (context for procurement risk)\r\n",
+        "SELECT year, indicator_name, score\r\n",
+        "FROM procintel.silver.governance_indicators\r\n",
+        "WHERE year >= 2005\r\n",
+        "ORDER BY year;"
+      ]
+    },
+    {
+      "name": "8ff98ae3",
+      "displayName": "top_suppliers",
+      "queryLines": [
+        "-- Top 15 suppliers by awarded value (names normalised; column tagged PII)\r\n",
+        "SELECT example_name AS supplier, n_contracts, n_projects,\r\n",
+        "       ROUND(total_awarded_usd / 1e6, 2) AS awarded_usd_millions\r\n",
+        "FROM procintel.gold.supplier_kpis\r\n",
+        "ORDER BY total_awarded_usd DESC\r\n",
+        "LIMIT 15;"
+      ]
+    },
+    {
+      "name": "b6b35b81",
+      "displayName": "projects",
+      "queryLines": [
+        "-- Project-level procurement KPIs\r\n",
+        "SELECT project_id, project_name, status, n_contracts,\r\n",
+        "       ROUND(contracted_usd / 1e6, 1) AS contracted_usd_millions,\r\n",
+        "       pct_direct_selection, median_tender_days\r\n",
+        "FROM procintel.gold.project_kpis\r\n",
+        "WHERE n_contracts > 0\r\n",
+        "ORDER BY contracted_usd DESC;"
+      ]
+    },
+    {
+      "name": "2a893241",
+      "displayName": "projects_overview",
+      "queryLines": [
+        "-- How many projects were approved each year, how much money, and their status\r\n",
+        "SELECT year(approval_date)                       AS approval_year,\r\n",
+        "       status,\r\n",
+        "       COUNT(*)                                  AS n_projects,\r\n",
+        "       ROUND(SUM(total_commitment_usd) / 1e9, 2) AS commitment_usd_billions\r\n",
+        "FROM procintel.silver.projects\r\n",
+        "WHERE approval_date IS NOT NULL AND year(approval_date) >= 2000\r\n",
+        "GROUP BY ALL\r\n",
+        "ORDER BY approval_year;"
+      ]
+    },
+    {
+      "name": "29af26d4",
+      "displayName": "notices_by_year",
+      "queryLines": [
+        "-- How procurement is advertised: notice types per year\r\n",
+        "-- CASE groups the many notice types into 4 readable buckets\r\n",
+        "SELECT year(notice_date) AS notice_year,\r\n",
+        "       CASE\r\n",
+        "         WHEN notice_type ILIKE '%Invitation for Bids%'        THEN 'Invitation for Bids'\r\n",
+        "         WHEN notice_type ILIKE '%Expression of Interest%'     THEN 'Request for EOI'\r\n",
+        "         WHEN notice_type ILIKE '%Contract Award%'             THEN 'Contract Award'\r\n",
+        "         ELSE 'Other'\r\n",
+        "       END               AS notice_group,\r\n",
+        "       COUNT(*)          AS n_notices\r\n",
+        "FROM procintel.silver.notices\r\n",
+        "WHERE notice_date IS NOT NULL AND year(notice_date) >= 2015\r\n",
+        "GROUP BY ALL\r\n",
+        "ORDER BY notice_year;"
+      ]
+    },
+    {
+      "name": "8e8aa463",
+      "displayName": "documents_by_family",
+      "queryLines": [
+        "-- The unstructured \"why\" layer: which report types exist per year\r\n",
+        "-- authority = how much we trust each type when sources disagree\r\n",
+        "SELECT year(doc_date)        AS doc_year,\r\n",
+        "       doc_family,\r\n",
+        "       MAX(authority)        AS authority,\r\n",
+        "       COUNT(*)              AS n_docs\r\n",
+        "FROM procintel.silver.documents\r\n",
+        "WHERE doc_family <> 'OTHER' AND doc_date IS NOT NULL AND year(doc_date) >= 2000\r\n",
+        "GROUP BY ALL\r\n",
+        "ORDER BY doc_year;"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "0969e8b1",
+      "displayName": "Kenya_Procurement_Intelligence",
+      "layout": [
+        {
+          "widget": {
+            "name": "where-money-goes-each-year",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "b77184dd",
+                  "fields": [
+                    {
+                      "name": "procurement_group",
+                      "expression": "`procurement_group`"
+                    },
+                    {
+                      "name": "signing_year",
+                      "expression": "`signing_year`"
+                    },
+                    {
+                      "name": "sum(usd_millions)",
+                      "expression": "SUM(`usd_millions`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Where the money goes each year",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "signing_year",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(usd_millions)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "procurement_group",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 2,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "projects-overview",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "2a893241",
+                  "fields": [
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    },
+                    {
+                      "name": "approval_year",
+                      "expression": "`approval_year`"
+                    },
+                    {
+                      "name": "sum(commitment_usd_billions)",
+                      "expression": "SUM(`commitment_usd_billions`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "World Bank’s lending pipeline in Kenya over time",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "approval_year",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(commitment_usd_billions)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "status",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "notices-how-layer",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "29af26d4",
+                  "fields": [
+                    {
+                      "name": "notice_group",
+                      "expression": "`notice_group`"
+                    },
+                    {
+                      "name": "notice_year",
+                      "expression": "`notice_year`"
+                    },
+                    {
+                      "name": "sum(n_notices)",
+                      "expression": "SUM(`n_notices`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Notices are the ‘how’ layer",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "notice_year",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(n_notices)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "notice_group",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 8,
+            "width": 4,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "ed43043c",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "8e8aa463",
+                  "fields": [
+                    {
+                      "name": "doc_family",
+                      "expression": "`doc_family`"
+                    },
+                    {
+                      "name": "doc_year",
+                      "expression": "`doc_year`"
+                    },
+                    {
+                      "name": "sum(n_docs)",
+                      "expression": "SUM(`n_docs`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": false
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "doc_year",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(n_docs)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "doc_family",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 8,
+            "width": 4,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "18fd0a4f",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "90d303f7",
+                  "fields": [
+                    {
+                      "name": "indicator_name",
+                      "expression": "`indicator_name`"
+                    },
+                    {
+                      "name": "year",
+                      "expression": "`year`"
+                    },
+                    {
+                      "name": "max(score)",
+                      "expression": "MAX(`score`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "year",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "max(score)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "indicator_name",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 8,
+            "width": 4,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "contracts",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "1895cb3e",
+                  "fields": [
+                    {
+                      "name": "contracts",
+                      "expression": "`contracts`"
+                    },
+                    {
+                      "name": "contracted_usd_millions",
+                      "expression": "`contracted_usd_millions`"
+                    },
+                    {
+                      "name": "median_tender_days",
+                      "expression": "`median_tender_days`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Contracts:",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "contracts"
+                  },
+                  {
+                    "fieldName": "contracted_usd_millions"
+                  },
+                  {
+                    "fieldName": "median_tender_days"
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "top-suppliers",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "8ff98ae3",
+                  "fields": [
+                    {
+                      "name": "supplier",
+                      "expression": "`supplier`"
+                    },
+                    {
+                      "name": "n_contracts",
+                      "expression": "`n_contracts`"
+                    },
+                    {
+                      "name": "n_projects",
+                      "expression": "`n_projects`"
+                    },
+                    {
+                      "name": "awarded_usd_millions",
+                      "expression": "`awarded_usd_millions`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "TOP Suppliers\n<p>&nbsp;</p>\n",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "supplier"
+                  },
+                  {
+                    "fieldName": "n_contracts"
+                  },
+                  {
+                    "fieldName": "n_projects"
+                  },
+                  {
+                    "fieldName": "awarded_usd_millions"
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 14,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "projects1",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "b6b35b81",
+                  "fields": [
+                    {
+                      "name": "project_id",
+                      "expression": "`project_id`"
+                    },
+                    {
+                      "name": "project_name",
+                      "expression": "`project_name`"
+                    },
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    },
+                    {
+                      "name": "n_contracts",
+                      "expression": "`n_contracts`"
+                    },
+                    {
+                      "name": "contracted_usd_millions",
+                      "expression": "`contracted_usd_millions`"
+                    },
+                    {
+                      "name": "pct_direct_selection",
+                      "expression": "`pct_direct_selection`"
+                    },
+                    {
+                      "name": "median_tender_days",
+                      "expression": "`median_tender_days`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "PROJECTS\n<p>&nbsp;</p>\n",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "project_id"
+                  },
+                  {
+                    "fieldName": "project_name"
+                  },
+                  {
+                    "fieldName": "status"
+                  },
+                  {
+                    "fieldName": "n_contracts"
+                  },
+                  {
+                    "fieldName": "contracted_usd_millions"
+                  },
+                  {
+                    "fieldName": "pct_direct_selection"
+                  },
+                  {
+                    "fieldName": "median_tender_days"
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 20,
+            "width": 12,
+            "height": 6
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "edf24896",
+      "displayName": "Global Filters",
+      "layout": [
+        {
+          "widget": {
+            "name": "ffff86d5",
+            "spec": {
+              "encodings": {
+                "fields": []
+              },
+              "version": 2,
+              "widgetType": "filter-single-select",
+              "frame": {
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 1,
+            "height": 2
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_GLOBAL_FILTERS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED"
+    },
+    "applyModeEnabled": false
+  }
+}
